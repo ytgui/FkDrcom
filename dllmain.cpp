@@ -1,56 +1,20 @@
 // dllmain.cpp : Defines the entry point for the DLL application.
 #include "stdafx.h"
-
-#include "detours.h"
-#pragma comment(lib,"detours.lib")
-
-#include <shellapi.h>
-
-#include <stdio.h>
-#include <stdlib.h>
-#include <tchar.h>
-
-#include <WinSock2.h>
-#pragma comment(lib,"ws2_32.lib")
-
-static int (WSAAPI * TrueWSAStartup)(
-	_In_ WORD wVersionRequested,
-	_Out_ LPWSADATA lpWSAData
-	) = WSAStartup;
-
-int WSAAPI RevisedWSAStartup(
-	_In_ WORD wVersionRequested,
-	_Out_ LPWSADATA lpWSAData
-	)
-{
-	return NULL;
-}
-
-static BOOL (WINAPI * TrueShellExecuteExW)(
-	__inout SHELLEXECUTEINFOW *pExecInfo
-	)
-	= ShellExecuteExW;
-
-BOOL WINAPI RevisedShellExecuteExW(
-	__inout SHELLEXECUTEINFOW *pExecInfo
-	)
-{
-	return TRUE;
-}
-
+#include "FkDrcom.h"
 
 
 static bool bHijacked1 = false;
 static bool bHijacked2 = false;
 
-BOOL APIENTRY DllMain( HMODULE hModule,
-                       DWORD  ul_reason_for_call,
-                       LPVOID lpReserved)
+BOOL APIENTRY DllMain(HMODULE hModule,
+	DWORD  ul_reason_for_call,
+	LPVOID lpReserved)
 {
 	switch (ul_reason_for_call)
 	{
 	case DLL_PROCESS_ATTACH:
 	{
+		//::MessageBoxW(NULL, _T("½øÈë"), _T("W"), MB_OK);
 		DisableThreadLibraryCalls(hModule);
 
 		wchar_t szCurrentPath[MAX_PATH] = { 0 };
@@ -58,6 +22,7 @@ BOOL APIENTRY DllMain( HMODULE hModule,
 
 		if (wcsstr(szCurrentPath, _T("DrUpdate.exe")))
 		{
+			//::MessageBoxW(NULL, _T("DrUpdate.exe"), _T("W"), MB_OK);
 			bHijacked1 = true;
 
 			DetourTransactionBegin();
@@ -67,14 +32,16 @@ BOOL APIENTRY DllMain( HMODULE hModule,
 		}
 		else if (wcsstr(szCurrentPath, _T("DrClient.exe")))
 		{
+			//::MessageBoxW(NULL, _T("DrClient.exe"), _T("W"), MB_OK);
+			bHijacked2 = true;
+			DetourTransactionBegin();
+			DetourUpdateThread(GetCurrentThread());
 			if (1 == ::GetPrivateProfileInt(_T("Hook"), _T("ShellExecuteEx"), 1, _T(".\\FkDrcom.ini")))
 			{
-				bHijacked2 = true;
-				DetourTransactionBegin();
-				DetourUpdateThread(GetCurrentThread());
 				DetourAttach(&(PVOID&)TrueShellExecuteExW, RevisedShellExecuteExW);
-				DetourTransactionCommit();
 			}
+			DetourAttach(&(PVOID&)TrueProcess32Next, RevisedProcess32Next);
+			DetourTransactionCommit();
 		}
 
 		break;
@@ -95,7 +62,11 @@ BOOL APIENTRY DllMain( HMODULE hModule,
 		{
 			DetourTransactionBegin();
 			DetourUpdateThread(GetCurrentThread());
-			DetourDetach(&(PVOID&)TrueShellExecuteExW, RevisedShellExecuteExW);
+			if (1 == ::GetPrivateProfileInt(_T("Hook"), _T("ShellExecuteEx"), 1, _T(".\\FkDrcom.ini")))
+			{
+				DetourDetach(&(PVOID&)TrueShellExecuteExW, RevisedShellExecuteExW);
+			}
+			DetourDetach(&(PVOID&)TrueProcess32Next, RevisedProcess32Next);
 			DetourTransactionCommit();
 		}
 		break;
